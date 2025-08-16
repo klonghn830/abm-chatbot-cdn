@@ -331,8 +331,8 @@
 
     // Configuration
     const ABM_CHATBOT_CONFIG = {
-        webhookUrl: 'YOUR_N8N_WEBHOOK_URL_HERE', // Thay bằng URL thực tế
-        brandName: 'ABM A.I',
+        webhookUrl: 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat', // Thay bằng URL thực tế
+        brandName: 'ABM - AI BUSINESS MASTER',
         brandSubtitle: 'Assistant Bot',
         welcomeMessage: 'Xin chào! Tôi là ABM AI Assistant. Tôi có thể giúp gì cho bạn hôm nay?',
         placeholder: 'Nhập tin nhắn của bạn...',
@@ -596,7 +596,7 @@
 
     // Test connection periodically
     function startConnectionTest() {
-        if (ABM_CHATBOT_CONFIG.webhookUrl !== 'YOUR_N8N_WEBHOOK_URL_HERE') {
+        if (ABM_CHATBOT_CONFIG.webhookUrl !== 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat') {
             setInterval(async () => {
                 try {
                     const response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
@@ -650,5 +650,6 @@
 
     // Auto-initialize
     init();
+
 
 })();
