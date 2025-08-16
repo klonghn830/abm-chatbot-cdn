@@ -331,8 +331,8 @@
 
     // Configuration
     const ABM_CHATBOT_CONFIG = {
-        webhookUrl: 'YOUR_N8N_WEBHOOK_URL_HERE', // Thay bằng URL thực tế
-        brandName: 'ABM A.I',
+        webhookUrl: 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat', // Thay bằng URL thực tế
+        brandName: 'ABM - AI BUSINESS MASTER',
         brandSubtitle: 'Assistant Bot',
         welcomeMessage: 'Xin chào! Tôi là ABM AI Assistant. Tôi có thể giúp gì cho bạn hôm nay?',
         placeholder: 'Nhập tin nhắn của bạn...',
@@ -343,6 +343,17 @@
     let isTyping = false;
     let isConnected = true;
     let messages = [];
+    let sessionId = null;
+
+    // Generate session ID
+    function generateSessionId() {
+        if (!sessionId) {
+            const timestamp = Date.now().toString(36);
+            const random = Math.random().toString(36).substr(2, 9);
+            sessionId = `${timestamp}-${random}`;
+        }
+        return sessionId;
+    }
 
     // Inject styles into page
     function injectStyles() {
@@ -471,12 +482,6 @@
         
         if (!message || isTyping) return;
 
-        // Check webhook URL
-        if (ABM_CHATBOT_CONFIG.webhookUrl === 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat') {
-            addMessage('⚠️ Webhook URL chưa được cấu hình. Vui lòng cập nhật URL n8n webhook.', 'bot');
-            return;
-        }
-
         // Add user message
         addMessage(message, 'user');
         textarea.value = '';
@@ -487,65 +492,48 @@
         showTyping();
 
         try {
-            // Add timeout for request
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+            // Prepare data in the format n8n expects
+            const payload = {
+                action: 'sendMessage',
+                sessionId: generateSessionId(),
+                chatInput: message
+            };
 
             const response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
                 },
-                body: JSON.stringify({
-                    message: message,
-                    timestamp: new Date().toISOString(),
-                    userId: generateUserId(),
-                    source: 'abm-chatbot-widget'
-                }),
-                signal: controller.signal
+                body: JSON.stringify(payload)
             });
 
-            clearTimeout(timeoutId);
-
             if (response.ok) {
-                const contentType = response.headers.get('content-type');
-                let data;
-                
-                if (contentType && contentType.includes('application/json')) {
-                    data = await response.json();
-                } else {
-                    // Handle non-JSON responses
-                    const textResponse = await response.text();
-                    data = { response: textResponse };
-                }
-                
+                const data = await response.json();
                 hideTyping();
                 
-                const botMessage = data.response || data.message || data.reply || 'Message received successfully!';
+                // Handle different response formats from n8n
+                let botMessage;
+                if (data.response) {
+                    botMessage = data.response;
+                } else if (data.message) {
+                    botMessage = data.message;
+                } else if (data.output) {
+                    botMessage = data.output;
+                } else if (typeof data === 'string') {
+                    botMessage = data;
+                } else {
+                    botMessage = 'Xin lỗi, tôi không thể xử lý yêu cầu của bạn lúc này.';
+                }
+                
                 addMessage(botMessage, 'bot');
-                
                 updateConnectionStatus(true);
-                
-                console.log('✅ Message sent successfully', data);
             } else {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
-            console.error('❌ ABM Chatbot error:', error);
+            console.error('ABM Chatbot error:', error);
             hideTyping();
-            
-            let errorMessage = 'Xin lỗi, có lỗi xảy ra khi kết nối.';
-            
-            if (error.name === 'AbortError') {
-                errorMessage = 'Request timeout. Vui lòng thử lại.';
-            } else if (error.message.includes('CORS')) {
-                errorMessage = 'CORS error. Vui lòng kiểm tra cấu hình webhook.';
-            } else if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-                errorMessage = 'Không thể kết nối đến server. Vui lòng kiểm tra mạng.';
-            }
-            
-            addMessage(`❌ ${errorMessage}`, 'bot');
+            addMessage('Xin lỗi, có lỗi xảy ra khi kết nối. Vui lòng thử lại sau.', 'bot');
             updateConnectionStatus(false);
         }
 
@@ -579,7 +567,7 @@
         messagesContainer.appendChild(messageDiv);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-        messages.push({ text, sender, time });
+        messages.push({ text, sender, time, sessionId: generateSessionId() });
 
         // Show notification if chat is closed
         if (!isOpen && sender === 'bot') {
@@ -626,59 +614,19 @@
         }
     }
 
-    // Generate user ID
-    function generateUserId() {
-        return 'abm_user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    }
-
     // Test connection periodically
     function startConnectionTest() {
         if (ABM_CHATBOT_CONFIG.webhookUrl !== 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat') {
-            // Initial connection test
-            testConnection();
-            
-            // Periodic test every 60 seconds
-            setInterval(testConnection, 60000);
-        }
-    }
-
-    // Test connection function
-    async function testConnection() {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for test
-            
-            // Try OPTIONS first (preflight), then HEAD, then simple GET
-            let response;
-            try {
-                response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
-                    method: 'OPTIONS',
-                    signal: controller.signal
-                });
-            } catch (optionsError) {
-                // If OPTIONS fails, try HEAD
+            setInterval(async () => {
                 try {
-                    response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
-                        method: 'HEAD',
-                        signal: controller.signal
+                    const response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
+                        method: 'HEAD'
                     });
-                } catch (headError) {
-                    // If HEAD fails, try simple GET with minimal payload
-                    response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ test: true, source: 'connection-test' }),
-                        signal: controller.signal
-                    });
+                    updateConnectionStatus(response.ok);
+                } catch (error) {
+                    updateConnectionStatus(false);
                 }
-            }
-            
-            clearTimeout(timeoutId);
-            updateConnectionStatus(response.ok);
-            
-        } catch (error) {
-            console.warn('Connection test failed:', error.message);
-            updateConnectionStatus(false);
+            }, 30000);
         }
     }
 
@@ -714,10 +662,13 @@
             config: ABM_CHATBOT_CONFIG,
             updateConfig: (newConfig) => {
                 Object.assign(ABM_CHATBOT_CONFIG, newConfig);
-            }
+            },
+            getSessionId: () => generateSessionId(),
+            getMessages: () => messages
         };
 
         console.log('✅ ABM Chatbot Widget loaded successfully');
+        console.log('📧 Session ID:', generateSessionId());
     }
 
     // Auto-initialize
