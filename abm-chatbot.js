@@ -331,8 +331,8 @@
 
     // Configuration
     const ABM_CHATBOT_CONFIG = {
-        webhookUrl: 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat', // Thay bằng URL thực tế
-        brandName: 'ABM - AI BUSINESS MASTER',
+        webhookUrl: 'YOUR_N8N_WEBHOOK_URL_HERE', // Thay bằng URL thực tế
+        brandName: 'ABM A.I',
         brandSubtitle: 'Assistant Bot',
         welcomeMessage: 'Xin chào! Tôi là ABM AI Assistant. Tôi có thể giúp gì cho bạn hôm nay?',
         placeholder: 'Nhập tin nhắn của bạn...',
@@ -471,6 +471,12 @@
         
         if (!message || isTyping) return;
 
+        // Check webhook URL
+        if (ABM_CHATBOT_CONFIG.webhookUrl === 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat') {
+            addMessage('⚠️ Webhook URL chưa được cấu hình. Vui lòng cập nhật URL n8n webhook.', 'bot');
+            return;
+        }
+
         // Add user message
         addMessage(message, 'user');
         textarea.value = '';
@@ -481,34 +487,65 @@
         showTyping();
 
         try {
+            // Add timeout for request
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
             const response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                 },
                 body: JSON.stringify({
                     message: message,
                     timestamp: new Date().toISOString(),
                     userId: generateUserId(),
                     source: 'abm-chatbot-widget'
-                })
+                }),
+                signal: controller.signal
             });
 
+            clearTimeout(timeoutId);
+
             if (response.ok) {
-                const data = await response.json();
+                const contentType = response.headers.get('content-type');
+                let data;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    // Handle non-JSON responses
+                    const textResponse = await response.text();
+                    data = { response: textResponse };
+                }
+                
                 hideTyping();
                 
-                const botMessage = data.response || data.message || 'Xin lỗi, tôi không thể xử lý yêu cầu của bạn lúc này.';
+                const botMessage = data.response || data.message || data.reply || 'Message received successfully!';
                 addMessage(botMessage, 'bot');
                 
                 updateConnectionStatus(true);
+                
+                console.log('✅ Message sent successfully', data);
             } else {
-                throw new Error('Network error');
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
-            console.error('ABM Chatbot error:', error);
+            console.error('❌ ABM Chatbot error:', error);
             hideTyping();
-            addMessage('Xin lỗi, có lỗi xảy ra khi kết nối. Vui lòng thử lại sau.', 'bot');
+            
+            let errorMessage = 'Xin lỗi, có lỗi xảy ra khi kết nối.';
+            
+            if (error.name === 'AbortError') {
+                errorMessage = 'Request timeout. Vui lòng thử lại.';
+            } else if (error.message.includes('CORS')) {
+                errorMessage = 'CORS error. Vui lòng kiểm tra cấu hình webhook.';
+            } else if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+                errorMessage = 'Không thể kết nối đến server. Vui lòng kiểm tra mạng.';
+            }
+            
+            addMessage(`❌ ${errorMessage}`, 'bot');
             updateConnectionStatus(false);
         }
 
@@ -597,16 +634,51 @@
     // Test connection periodically
     function startConnectionTest() {
         if (ABM_CHATBOT_CONFIG.webhookUrl !== 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat') {
-            setInterval(async () => {
+            // Initial connection test
+            testConnection();
+            
+            // Periodic test every 60 seconds
+            setInterval(testConnection, 60000);
+        }
+    }
+
+    // Test connection function
+    async function testConnection() {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for test
+            
+            // Try OPTIONS first (preflight), then HEAD, then simple GET
+            let response;
+            try {
+                response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
+                    method: 'OPTIONS',
+                    signal: controller.signal
+                });
+            } catch (optionsError) {
+                // If OPTIONS fails, try HEAD
                 try {
-                    const response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
-                        method: 'HEAD'
+                    response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
+                        method: 'HEAD',
+                        signal: controller.signal
                     });
-                    updateConnectionStatus(response.ok);
-                } catch (error) {
-                    updateConnectionStatus(false);
+                } catch (headError) {
+                    // If HEAD fails, try simple GET with minimal payload
+                    response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ test: true, source: 'connection-test' }),
+                        signal: controller.signal
+                    });
                 }
-            }, 30000);
+            }
+            
+            clearTimeout(timeoutId);
+            updateConnectionStatus(response.ok);
+            
+        } catch (error) {
+            console.warn('Connection test failed:', error.message);
+            updateConnectionStatus(false);
         }
     }
 
@@ -650,6 +722,5 @@
 
     // Auto-initialize
     init();
-
 
 })();
