@@ -1,585 +1,692 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ABM AI Chat Bot</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+/**
+ * ABM Chatbot Widget - CDN Version
+ * Embeddable chatbot widget with n8n webhook integration
+ * Usage: <script src="https://your-cdn.com/abm-chatbot.js"></script>
+ */
+
+(function() {
+    'use strict';
+    
+    // Prevent multiple initialization
+    if (window.ABMChatbot) {
+        return;
+    }
+
+    // Inject CSS styles
+    const styles = `
+        /* ABM Chatbot Styles */
+        #abm-chatbot-widget {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
-        body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            height: 100vh;
+        #abm-chatbot-toggle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #E31E24 0%, #B71C1C 100%);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(227, 30, 36, 0.4);
             display: flex;
-            justify-content: center;
             align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
-        .chat-container {
-            width: 400px;
+        #abm-chatbot-toggle:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 25px rgba(227, 30, 36, 0.6);
+        }
+
+        #abm-chatbot-toggle svg {
+            color: white;
+            transition: transform 0.3s ease;
+        }
+
+        #abm-chatbot-toggle.open svg {
+            transform: rotate(180deg);
+        }
+
+        /* Notification badge */
+        #abm-chatbot-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ff4444;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        #abm-chatbot-container {
+            position: absolute;
+            bottom: 80px;
+            right: 0;
+            width: 380px;
             height: 600px;
             background: white;
             border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            transform: scale(0) translateY(20px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             overflow: hidden;
             display: flex;
             flex-direction: column;
         }
 
-        .chat-header {
-            background: linear-gradient(135deg, #dc143c 0%, #b91c3c 100%);
+        #abm-chatbot-container.show {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+
+        .abm-chat-header {
+            background: linear-gradient(135deg, #E31E24 0%, #B71C1C 100%);
             color: white;
             padding: 20px;
-            text-align: center;
-            position: relative;
-        }
-
-        .chat-header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-            opacity: 0.3;
-        }
-
-        .brand-logo {
-            font-size: 24px;
-            font-weight: bold;
-            letter-spacing: 2px;
-            margin-bottom: 5px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .chat-subtitle {
-            font-size: 14px;
-            opacity: 0.9;
-            position: relative;
-            z-index: 1;
-        }
-
-        .status-indicator {
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            justify-content: center;
-            margin-top: 10px;
-            position: relative;
-            z-index: 1;
         }
 
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: #00ff88;
+        .abm-brand-info h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .abm-brand-info p {
+            margin: 0;
+            font-size: 12px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .abm-status-dot {
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            margin-right: 5px;
-            animation: pulse 2s infinite;
+            background: #4CAF50;
+            animation: abm-pulse 2s infinite;
         }
 
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+        @keyframes abm-pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
         }
 
-        .chat-messages {
+        .abm-chat-messages {
             flex: 1;
             overflow-y: auto;
             padding: 20px;
             background: #f8f9fa;
         }
 
-        .message {
+        .abm-message {
             margin-bottom: 15px;
-            animation: fadeInUp 0.3s ease;
+            display: flex;
+            animation: abm-slideIn 0.3s ease;
         }
 
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        @keyframes abm-slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        .message.bot {
-            text-align: left;
+        .abm-message.user {
+            justify-content: flex-end;
         }
 
-        .message.user {
-            text-align: right;
+        .abm-message.bot {
+            justify-content: flex-start;
         }
 
-        .message-bubble {
-            display: inline-block;
+        .abm-message-bubble {
             max-width: 80%;
             padding: 12px 16px;
             border-radius: 18px;
-            font-size: 14px;
+            position: relative;
+            word-wrap: break-word;
             line-height: 1.4;
+            white-space: pre-wrap;
         }
 
-        .message.bot .message-bubble {
+        .abm-message.bot .abm-message-bubble {
             background: white;
             color: #333;
-            border-bottom-left-radius: 5px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
         }
 
-        .message.user .message-bubble {
-            background: linear-gradient(135deg, #dc143c 0%, #b91c3c 100%);
+        .abm-message.user .abm-message-bubble {
+            background: linear-gradient(135deg, #E31E24 0%, #B71C1C 100%);
             color: white;
-            border-bottom-right-radius: 5px;
+            box-shadow: 0 2px 12px rgba(227, 30, 36, 0.3);
         }
 
-        .welcome-screen {
-            text-align: center;
-            padding: 40px 20px;
-            color: #666;
+        .abm-message-time {
+            font-size: 10px;
+            opacity: 0.7;
+            margin-top: 5px;
+            text-align: right;
         }
 
-        .welcome-icon {
-            font-size: 48px;
-            margin-bottom: 20px;
+        .abm-typing-indicator {
+            display: none;
+            margin-bottom: 15px;
         }
 
-        .welcome-title {
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: #dc143c;
+        .abm-typing-indicator.show {
+            display: block;
         }
 
-        .welcome-subtitle {
-            font-size: 14px;
-            margin-bottom: 20px;
-            line-height: 1.5;
+        .abm-typing-dots {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: white;
+            border-radius: 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+            width: fit-content;
         }
 
-        .get-started-btn {
-            background: linear-gradient(135deg, #dc143c 0%, #b91c3c 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
+        .abm-typing-dots span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #E31E24;
+            margin: 0 2px;
+            animation: abm-typing 1.4s infinite ease-in-out;
+        }
+
+        .abm-typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .abm-typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .abm-typing-dots span:nth-child(3) { animation-delay: 0s; }
+
+        @keyframes abm-typing {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .abm-chat-input {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .abm-input-wrapper {
+            display: flex;
+            align-items: flex-end;
+            background: #f5f5f5;
             border-radius: 25px;
-            font-size: 14px;
-            cursor: pointer;
+            padding: 5px;
             transition: all 0.3s ease;
         }
 
-        .get-started-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(220, 20, 60, 0.4);
-        }
-
-        .chat-input-container {
-            padding: 20px;
+        .abm-input-wrapper:focus-within {
             background: white;
-            border-top: 1px solid #eee;
+            box-shadow: 0 0 0 2px rgba(227, 30, 36, 0.2);
         }
 
-        .chat-input-wrapper {
-            display: flex;
-            align-items: center;
-            background: #f8f9fa;
-            border-radius: 25px;
-            padding: 5px;
-        }
-
-        .chat-input {
+        .abm-input-wrapper textarea {
             flex: 1;
             border: none;
-            outline: none;
-            padding: 12px 16px;
             background: transparent;
+            padding: 12px 16px;
             font-size: 14px;
+            outline: none;
+            resize: none;
+            max-height: 100px;
+            font-family: inherit;
         }
 
-        .chat-input::placeholder {
+        .abm-input-wrapper textarea::placeholder {
             color: #999;
         }
 
-        .send-btn {
-            background: linear-gradient(135deg, #dc143c 0%, #b91c3c 100%);
-            color: white;
-            border: none;
+        .abm-send-btn {
             width: 40px;
             height: 40px;
+            border: none;
+            background: linear-gradient(135deg, #E31E24 0%, #B71C1C 100%);
+            color: white;
             border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.3s ease;
+            margin-right: 5px;
         }
 
-        .send-btn:hover {
-            transform: scale(1.1);
+        .abm-send-btn:hover:not(:disabled) {
+            transform: scale(1.05);
         }
 
-        .send-btn:disabled {
+        .abm-send-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-            transform: none;
         }
 
-        .typing-indicator {
-            display: none;
-            text-align: left;
-            margin-bottom: 15px;
-        }
-
-        .typing-indicator .message-bubble {
-            background: white;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .typing-dots {
-            display: flex;
-            gap: 3px;
-        }
-
-        .typing-dot {
-            width: 6px;
-            height: 6px;
-            background: #dc143c;
-            border-radius: 50%;
-            animation: typing 1.4s infinite;
-        }
-
-        .typing-dot:nth-child(1) { animation-delay: 0s; }
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-10px); }
-        }
-
-        .chat-footer {
+        .abm-welcome {
             text-align: center;
-            padding: 10px;
-            font-size: 12px;
-            color: #999;
-            background: #f8f9fa;
+            color: #666;
+            padding: 20px;
+            font-style: italic;
         }
 
-        /* Scrollbar styling */
-        .chat-messages::-webkit-scrollbar {
-            width: 6px;
+        .abm-connection-status {
+            padding: 0 20px 10px;
+            text-align: right;
+            font-size: 11px;
+            opacity: 0.7;
         }
 
-        .chat-messages::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
+        .abm-connection-status.connected { color: #4CAF50; }
+        .abm-connection-status.disconnected { color: #f44336; }
 
-        .chat-messages::-webkit-scrollbar-thumb {
-            background: #dc143c;
-            border-radius: 3px;
-        }
-
-        .chat-messages::-webkit-scrollbar-thumb:hover {
-            background: #b91c3c;
-        }
-    </style>
-</head>
-<body>
-    <div class="chat-container" id="n8n-chat">
-        <div class="chat-header">
-            <div class="brand-logo">ABM A.I</div>
-            <div class="chat-subtitle">Trợ lý thông minh của bạn</div>
-            <div class="status-indicator">
-                <div class="status-dot"></div>
-                <span style="font-size: 12px;">Đang hoạt động</span>
-            </div>
-        </div>
-
-        <div class="chat-messages" id="chatMessages">
-            <div class="welcome-screen" id="welcomeScreen">
-                <div class="welcome-icon">🤖</div>
-                <div class="welcome-title">Xin chào! 👋</div>
-                <div class="welcome-subtitle">Tôi là ABM AI, trợ lý thông minh của bạn. Hãy bắt đầu cuộc trò chuyện để tôi có thể hỗ trợ bạn 24/7.</div>
-                <button class="get-started-btn" onclick="startNewChat()">Bắt đầu trò chuyện</button>
-            </div>
+        /* Mobile responsive */
+        @media (max-width: 480px) {
+            #abm-chatbot-widget {
+                bottom: 10px;
+                right: 10px;
+            }
             
-            <div class="typing-indicator" id="typingIndicator">
-                <div class="message-bubble">
-                    <div class="typing-dots">
-                        <div class="typing-dot"></div>
-                        <div class="typing-dot"></div>
-                        <div class="typing-dot"></div>
+            #abm-chatbot-container {
+                width: calc(100vw - 20px);
+                height: calc(100vh - 100px);
+                right: -10px;
+                bottom: 70px;
+            }
+        }
+
+        /* Scroll styling */
+        .abm-chat-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .abm-chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .abm-chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(227, 30, 36, 0.3);
+            border-radius: 2px;
+        }
+    `;
+
+    // Configuration
+    const ABM_CHATBOT_CONFIG = {
+        webhookUrl: 'YOUR_N8N_WEBHOOK_URL_HERE', // Thay bằng URL thực tế
+        brandName: 'ABM A.I',
+        brandSubtitle: 'Assistant Bot',
+        welcomeMessage: 'Xin chào! Tôi là ABM AI Assistant. Tôi có thể giúp gì cho bạn hôm nay?',
+        placeholder: 'Nhập tin nhắn của bạn...',
+        position: 'bottom-right' // bottom-right, bottom-left
+    };
+
+    let isOpen = false;
+    let isTyping = false;
+    let isConnected = true;
+    let messages = [];
+    let sessionId = null;
+
+    // Generate session ID
+    function generateSessionId() {
+        if (!sessionId) {
+            const timestamp = Date.now().toString(36);
+            const random = Math.random().toString(36).substr(2, 9);
+            sessionId = `${timestamp}-${random}`;
+        }
+        return sessionId;
+    }
+
+    // Inject styles into page
+    function injectStyles() {
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = styles;
+        document.head.appendChild(styleSheet);
+    }
+
+    // Create widget HTML
+    function createWidget() {
+        const widget = document.createElement('div');
+        widget.id = 'abm-chatbot-widget';
+        
+        widget.innerHTML = `
+            <button id="abm-chatbot-toggle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="currentColor"/>
+                </svg>
+                <div id="abm-chatbot-badge">1</div>
+            </button>
+            
+            <div id="abm-chatbot-container">
+                <div class="abm-chat-header">
+                    <div class="abm-brand-info">
+                        <h3>${ABM_CHATBOT_CONFIG.brandName}</h3>
+                        <p>${ABM_CHATBOT_CONFIG.brandSubtitle}</p>
+                    </div>
+                    <div class="abm-status-dot"></div>
+                </div>
+                
+                <div class="abm-chat-messages" id="abm-chat-messages">
+                    <div class="abm-welcome">${ABM_CHATBOT_CONFIG.welcomeMessage}</div>
+                </div>
+                
+                <div class="abm-typing-indicator" id="abm-typing-indicator">
+                    <div class="abm-typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="chat-input-container">
-            <div class="chat-input-wrapper">
-                <input 
-                    type="text" 
-                    class="chat-input" 
-                    id="chatInput" 
-                    placeholder="Nhập câu hỏi của bạn..."
-                    disabled
-                >
-                <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-
-        <div class="chat-footer">
-            Powered by ABM Technology
-        </div>
-    </div>
-
-    <script>
-        // Chat configuration
-        const chatConfig = {
-            webhookUrl: 'https://your-n8n-webhook-url.com/webhook/chat',
-            webhookConfig: {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            },
-            target: '#n8n-chat',
-            mode: 'window',
-            chatInputKey: 'chatInput',
-            chatSessionKey: 'sessionId',
-            loadPreviousSession: true,
-            metadata: {
-                brand: 'ABM',
-                version: '1.0'
-            },
-            showWelcomeScreen: false,
-            defaultLanguage: 'vi',
-            initialMessages: [
-                'Xin chào! 👋',
-                'Tôi là ABM AI. Tôi có thể hỗ trợ bạn như thế nào hôm nay?'
-            ],
-            i18n: {
-                vi: {
-                    title: 'Xin chào! 👋',
-                    subtitle: "Bắt đầu trò chuyện. Chúng tôi luôn sẵn sàng hỗ trợ bạn 24/7.",
-                    footer: 'Powered by ABM Technology',
-                    getStarted: 'Bắt đầu trò chuyện',
-                    inputPlaceholder: 'Nhập câu hỏi của bạn...',
-                },
-            },
-            enableStreaming: false,
-        };
-
-        // Global variables
-        let sessionId = generateSessionId();
-        let messageHistory = [];
-        let isWaitingResponse = false;
-
-        // Generate session ID
-        function generateSessionId() {
-            return 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-        }
-
-        // Start new chat
-        function startNewChat() {
-            document.getElementById('welcomeScreen').style.display = 'none';
-            document.getElementById('chatInput').disabled = false;
-            document.getElementById('sendBtn').disabled = false;
-            
-            // Add initial messages
-            setTimeout(() => {
-                addBotMessage(chatConfig.initialMessages[0]);
-                setTimeout(() => {
-                    addBotMessage(chatConfig.initialMessages[1]);
-                }, 1000);
-            }, 500);
-            
-            // Focus on input
-            document.getElementById('chatInput').focus();
-        }
-
-        // Add message to chat
-        function addMessage(content, isBot = false) {
-            const messagesContainer = document.getElementById('chatMessages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isBot ? 'bot' : 'user'}`;
-            
-            const bubbleDiv = document.createElement('div');
-            bubbleDiv.className = 'message-bubble';
-            bubbleDiv.textContent = content;
-            
-            messageDiv.appendChild(bubbleDiv);
-            messagesContainer.appendChild(messageDiv);
-            
-            // Scroll to bottom
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            
-            // Save to history
-            messageHistory.push({
-                content: content,
-                isBot: isBot,
-                timestamp: new Date().toISOString()
-            });
-        }
-
-        // Add bot message with typing effect
-        function addBotMessage(content) {
-            showTypingIndicator();
-            setTimeout(() => {
-                hideTypingIndicator();
-                addMessage(content, true);
-            }, Math.random() * 1000 + 500);
-        }
-
-        // Show typing indicator
-        function showTypingIndicator() {
-            document.getElementById('typingIndicator').style.display = 'block';
-            const messagesContainer = document.getElementById('chatMessages');
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
-        // Hide typing indicator
-        function hideTypingIndicator() {
-            document.getElementById('typingIndicator').style.display = 'none';
-        }
-
-        // Send message
-        async function sendMessage() {
-            const input = document.getElementById('chatInput');
-            const message = input.value.trim();
-            
-            if (!message || isWaitingResponse) return;
-            
-            // Add user message
-            addMessage(message, false);
-            input.value = '';
-            
-            // Disable input while waiting
-            isWaitingResponse = true;
-            document.getElementById('sendBtn').disabled = true;
-            
-            try {
-                // Send to webhook
-                const response = await fetch(chatConfig.webhookUrl, {
-                    method: chatConfig.webhookConfig.method,
-                    headers: chatConfig.webhookConfig.headers,
-                    body: JSON.stringify({
-                        [chatConfig.chatInputKey]: message,
-                        [chatConfig.chatSessionKey]: sessionId,
-                        metadata: chatConfig.metadata,
-                        history: messageHistory.slice(-10) // Send last 10 messages
-                    })
-                });
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    const botResponse = data.response || data.message || 'Xin lỗi, tôi không hiểu câu hỏi của bạn.';
-                    addBotMessage(botResponse);
-                } else {
-                    addBotMessage('Xin lỗi, có lỗi xảy ra. Vui lòng thử lại sau.');
-                }
-            } catch (error) {
-                console.error('Error sending message:', error);
-                addBotMessage('Không thể kết nối đến server. Vui lòng kiểm tra kết nối internet.');
-            } finally {
-                // Re-enable input
-                isWaitingResponse = false;
-                document.getElementById('sendBtn').disabled = false;
-                input.focus();
-            }
-        }
+                <div class="abm-chat-input">
+                    <div class="abm-input-wrapper">
+                        <textarea id="abm-chat-textarea" placeholder="${ABM_CHATBOT_CONFIG.placeholder}" rows="1" maxlength="500"></textarea>
+                        <button id="abm-send-btn" class="abm-send-btn" disabled>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <path d="M2 21L23 12L2 3V10L17 12L2 14V21Z" fill="currentColor"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="abm-connection-status connected" id="abm-connection-status">
+                    Đã kết nối
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(widget);
+        return widget;
+    }
 
-        // Handle Enter key
-        document.getElementById('chatInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
+    // Initialize event listeners
+    function initEventListeners() {
+        const widget = document.getElementById('abm-chatbot-widget');
+        const toggle = document.getElementById('abm-chatbot-toggle');
+        const container = document.getElementById('abm-chatbot-container');
+        const textarea = document.getElementById('abm-chat-textarea');
+        const sendBtn = document.getElementById('abm-send-btn');
+
+        toggle.addEventListener('click', toggleChat);
+        sendBtn.addEventListener('click', sendMessage);
+        textarea.addEventListener('input', handleTextareaInput);
+        textarea.addEventListener('keypress', handleKeyPress);
+
+        // Close on outside click
+        document.addEventListener('click', function(e) {
+            if (!widget.contains(e.target) && isOpen) {
+                toggleChat();
             }
         });
+    }
 
-        // Handle input changes
-        document.getElementById('chatInput').addEventListener('input', function() {
-            const sendBtn = document.getElementById('sendBtn');
-            const hasText = this.value.trim().length > 0;
-            sendBtn.disabled = !hasText || isWaitingResponse;
-        });
-
-        // Initialize chat function (compatible with your template)
-        function createChat(config) {
-            // Merge config with default
-            Object.assign(chatConfig, config);
-            
-            // Update UI based on config
-            if (config.i18n && config.i18n[config.defaultLanguage]) {
-                const lang = config.i18n[config.defaultLanguage];
-                document.querySelector('.welcome-title').textContent = lang.title;
-                document.querySelector('.welcome-subtitle').textContent = lang.subtitle;
-                document.querySelector('.get-started-btn').textContent = lang.getStarted;
-                document.querySelector('.chat-input').placeholder = lang.inputPlaceholder;
-                if (lang.footer) {
-                    document.querySelector('.chat-footer').textContent = lang.footer;
-                }
-            }
-            
-            // Auto-start if showWelcomeScreen is false
-            if (!config.showWelcomeScreen) {
-                startNewChat();
-            }
-            
-            console.log('ABM Chat initialized with config:', chatConfig);
+    // Toggle chat visibility
+    function toggleChat() {
+        const toggle = document.getElementById('abm-chatbot-toggle');
+        const container = document.getElementById('abm-chatbot-container');
+        const badge = document.getElementById('abm-chatbot-badge');
+        
+        isOpen = !isOpen;
+        toggle.classList.toggle('open', isOpen);
+        container.classList.toggle('show', isOpen);
+        
+        if (isOpen) {
+            badge.style.display = 'none';
+            document.getElementById('abm-chat-textarea').focus();
         }
+    }
 
-        // Example usage (uncomment and modify webhook URL)
-        /*
-        createChat({
-            webhookUrl: 'https://your-n8n-instance.com/webhook/abm-chat',
-            webhookConfig: {
+    // Handle textarea input
+    function handleTextareaInput(e) {
+        const textarea = e.target;
+        const sendBtn = document.getElementById('abm-send-btn');
+        
+        // Auto resize
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px';
+        
+        // Enable/disable send button
+        sendBtn.disabled = textarea.value.trim() === '' || isTyping;
+    }
+
+    // Handle key press
+    function handleKeyPress(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    }
+
+    // Send message
+    async function sendMessage() {
+        const textarea = document.getElementById('abm-chat-textarea');
+        const message = textarea.value.trim();
+        
+        if (!message || isTyping) return;
+
+        // Add user message
+        addMessage(message, 'user');
+        textarea.value = '';
+        textarea.style.height = 'auto';
+        document.getElementById('abm-send-btn').disabled = true;
+
+        // Show typing
+        showTyping();
+
+        try {
+            // Prepare data in the format n8n expects
+            const payload = {
+                action: 'sendMessage',
+                sessionId: generateSessionId(),
+                chatInput: message
+            };
+
+            const response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer your-token'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                hideTyping();
+                
+                // Handle different response formats from n8n
+                let botMessage;
+                if (data.response) {
+                    botMessage = data.response;
+                } else if (data.message) {
+                    botMessage = data.message;
+                } else if (data.output) {
+                    botMessage = data.output;
+                } else if (typeof data === 'string') {
+                    botMessage = data;
+                } else {
+                    botMessage = 'Xin lỗi, tôi không thể xử lý yêu cầu của bạn lúc này.';
+                }
+                
+                addMessage(botMessage, 'bot');
+                updateConnectionStatus(true);
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('ABM Chatbot error:', error);
+            hideTyping();
+            addMessage('Xin lỗi, có lỗi xảy ra khi kết nối. Vui lòng thử lại sau.', 'bot');
+            updateConnectionStatus(false);
+        }
+
+        textarea.focus();
+    }
+
+    // Format text with line breaks
+    function formatMessageText(text) {
+        return text
+            .replace(/\n/g, '<br>')
+            .replace(/\r\n/g, '<br>')
+            .replace(/\r/g, '<br>')
+            .replace(/\\n/g, '<br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+    }
+
+    // Add message
+    function addMessage(text, sender) {
+        const messagesContainer = document.getElementById('abm-chat-messages');
+        const welcome = messagesContainer.querySelector('.abm-welcome');
+        
+        if (welcome) {
+            welcome.remove();
+        }
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `abm-message ${sender}`;
+        
+        const time = new Date().toLocaleTimeString('vi-VN', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+
+        const formattedText = formatMessageText(text);
+
+        messageDiv.innerHTML = `
+            <div class="abm-message-bubble">
+                ${formattedText}
+                <div class="abm-message-time">${time}</div>
+            </div>
+        `;
+
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        messages.push({ text, sender, time, sessionId: generateSessionId() });
+
+        // Show notification if chat is closed
+        if (!isOpen && sender === 'bot') {
+            showNotification();
+        }
+    }
+
+    // Show/hide typing
+    function showTyping() {
+        isTyping = true;
+        document.getElementById('abm-typing-indicator').classList.add('show');
+        document.getElementById('abm-chat-messages').scrollTop = document.getElementById('abm-chat-messages').scrollHeight;
+    }
+
+    function hideTyping() {
+        isTyping = false;
+        document.getElementById('abm-typing-indicator').classList.remove('show');
+    }
+
+    // Update connection status
+    function updateConnectionStatus(connected) {
+        isConnected = connected;
+        const status = document.getElementById('abm-connection-status');
+        const dot = document.querySelector('.abm-status-dot');
+        
+        if (status && dot) {
+            if (connected) {
+                status.textContent = 'Đã kết nối';
+                status.className = 'abm-connection-status connected';
+                dot.style.background = '#4CAF50';
+            } else {
+                status.textContent = 'Mất kết nối';
+                status.className = 'abm-connection-status disconnected';
+                dot.style.background = '#f44336';
+            }
+        }
+    }
+
+    // Show notification
+    function showNotification() {
+        const badge = document.getElementById('abm-chatbot-badge');
+        if (badge) {
+            badge.style.display = 'flex';
+        }
+    }
+
+    // Test connection periodically
+    function startConnectionTest() {
+        if (ABM_CHATBOT_CONFIG.webhookUrl !== 'YOUR_N8N_WEBHOOK_URL_HERE') {
+            setInterval(async () => {
+                try {
+                    const response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
+                        method: 'HEAD'
+                    });
+                    updateConnectionStatus(response.ok);
+                } catch (error) {
+                    updateConnectionStatus(false);
+                }
+            }, 30000);
+        }
+    }
+
+    // Initialize widget
+    function init() {
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+            return;
+        }
+
+        // Prevent multiple initialization
+        if (document.getElementById('abm-chatbot-widget')) {
+            return;
+        }
+
+        injectStyles();
+        createWidget();
+        initEventListeners();
+        startConnectionTest();
+
+        // Global API
+        window.ABMChatbot = {
+            open: () => !isOpen && toggleChat(),
+            close: () => isOpen && toggleChat(),
+            toggle: toggleChat,
+            sendMessage: (msg) => {
+                if (msg && typeof msg === 'string') {
+                    document.getElementById('abm-chat-textarea').value = msg;
+                    sendMessage();
                 }
             },
-            target: '#n8n-chat',
-            mode: 'window',
-            chatInputKey: 'chatInput',
-            chatSessionKey: 'sessionId',
-            loadPreviousSession: true,
-            metadata: {
-                brand: 'ABM',
-                version: '1.0'
+            config: ABM_CHATBOT_CONFIG,
+            updateConfig: (newConfig) => {
+                Object.assign(ABM_CHATBOT_CONFIG, newConfig);
             },
-            showWelcomeScreen: false,
-            defaultLanguage: 'vi',
-            initialMessages: [
-                'Xin chào! 👋',
-                'Tôi là ABM AI. Tôi có thể hỗ trợ bạn như thế nào hôm nay?'
-            ],
-            i18n: {
-                vi: {
-                    title: 'Xin chào! 👋',
-                    subtitle: "Bắt đầu trò chuyện. Chúng tôi luôn sẵn sàng hỗ trợ bạn 24/7.",
-                    footer: 'Powered by ABM Technology',
-                    getStarted: 'Bắt đầu trò chuyện',
-                    inputPlaceholder: 'Nhập câu hỏi của bạn...',
-                },
-            },
-            enableStreaming: false,
-        });
-        */
-    </script>
-</body>
-</html>
+            getSessionId: () => generateSessionId(),
+            getMessages: () => messages
+        };
+
+        console.log('✅ ABM Chatbot Widget loaded successfully');
+        console.log('📧 Session ID:', generateSessionId());
+    }
+
+    // Auto-initialize
+    init();
+
+})();
