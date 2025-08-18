@@ -162,8 +162,8 @@
             border-radius: 18px;
             position: relative;
             word-wrap: break-word;
-            line-height: 1.4;
-            white-space: pre-wrap;
+            line-height: 1.5;
+            white-space: normal;
         }
 
         .abm-message.bot .abm-message-bubble {
@@ -513,6 +513,9 @@
                 const data = await response.json();
                 hideTyping();
                 
+                // Debug: Log the actual response
+                console.log('N8N Response:', data);
+                
                 // Handle different response formats from n8n
                 let botMessage;
                 if (data.response) {
@@ -521,12 +524,15 @@
                     botMessage = data.message;
                 } else if (data.output) {
                     botMessage = data.output;
+                } else if (data.text) {
+                    botMessage = data.text;
                 } else if (typeof data === 'string') {
                     botMessage = data;
                 } else {
                     botMessage = 'Xin lỗi, tôi không thể xử lý yêu cầu của bạn lúc này.';
                 }
                 
+                console.log('Bot message before formatting:', JSON.stringify(botMessage));
                 addMessage(botMessage, 'bot');
                 updateConnectionStatus(true);
             } else {
@@ -544,13 +550,21 @@
 
     // Format text with line breaks
     function formatMessageText(text) {
-        return text
-            .replace(/\n/g, '<br>')
-            .replace(/\r\n/g, '<br>')
-            .replace(/\r/g, '<br>')
-            .replace(/\\n/g, '<br>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+        if (!text) return '';
+        
+        console.log('Formatting text:', JSON.stringify(text));
+        
+        // Convert various line break formats to HTML
+        let formatted = text
+            .replace(/\r\n/g, '\n')  // Normalize Windows line breaks
+            .replace(/\r/g, '\n')    // Normalize Mac line breaks
+            .replace(/\\n/g, '\n')   // Convert escaped \n to actual line breaks
+            .replace(/\n/g, '<br>')  // Convert to HTML breaks
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+            .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>'); // Italic (not part of **)
+        
+        console.log('Formatted text:', formatted);
+        return formatted;
     }
 
     // Add message
