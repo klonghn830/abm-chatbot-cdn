@@ -162,6 +162,8 @@
             border-radius: 18px;
             position: relative;
             word-wrap: break-word;
+            line-height: 1.4;
+            white-space: pre-wrap;
         }
 
         .abm-message.bot .abm-message-bubble {
@@ -331,8 +333,8 @@
 
     // Configuration
     const ABM_CHATBOT_CONFIG = {
-        webhookUrl: 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat', // Thay bằng URL thực tế
-        brandName: 'ABM - AI BUSINESS MASTER',
+        webhookUrl: 'YOUR_N8N_WEBHOOK_URL_HERE', // Thay bằng URL thực tế
+        brandName: 'ABM A.I',
         brandSubtitle: 'Assistant Bot',
         welcomeMessage: 'Xin chào! Tôi là ABM AI Assistant. Tôi có thể giúp gì cho bạn hôm nay?',
         placeholder: 'Nhập tin nhắn của bạn...',
@@ -540,6 +542,17 @@
         textarea.focus();
     }
 
+    // Format text with line breaks
+    function formatMessageText(text) {
+        return text
+            .replace(/\n/g, '<br>')
+            .replace(/\r\n/g, '<br>')
+            .replace(/\r/g, '<br>')
+            .replace(/\\n/g, '<br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+    }
+
     // Add message
     function addMessage(text, sender) {
         const messagesContainer = document.getElementById('abm-chat-messages');
@@ -557,9 +570,11 @@
             minute: '2-digit' 
         });
 
+        const formattedText = formatMessageText(text);
+
         messageDiv.innerHTML = `
             <div class="abm-message-bubble">
-                ${text}
+                ${formattedText}
                 <div class="abm-message-time">${time}</div>
             </div>
         `;
@@ -616,7 +631,7 @@
 
     // Test connection periodically
     function startConnectionTest() {
-        if (ABM_CHATBOT_CONFIG.webhookUrl !== 'https://abm.hocn8n.com/webhook/86de9261-be70-4524-9638-e92b37a5575a/chat') {
+        if (ABM_CHATBOT_CONFIG.webhookUrl !== 'YOUR_N8N_WEBHOOK_URL_HERE') {
             setInterval(async () => {
                 try {
                     const response = await fetch(ABM_CHATBOT_CONFIG.webhookUrl, {
